@@ -7,7 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1Dhxjshi6lteLzfRC8Kqzq_glqjGsdFTJ
 """
 
-pip install streamlit-drawable-canvas
+
 
 # All-in-One Dental Cavity Detection App
 # -----------------------------------------------------
