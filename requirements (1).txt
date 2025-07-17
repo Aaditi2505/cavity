@@ -1,0 +1,7 @@
+streamlit
+Pillow
+gtts
+pandas
+plotly
+requests
+email-validator
