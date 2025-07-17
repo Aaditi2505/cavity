@@ -319,4 +319,4 @@ elif st.session_state.page == "doctor":
         st.session_state.page = "doctor_login"
         st.rerun()
 
-pip install gtts
+
