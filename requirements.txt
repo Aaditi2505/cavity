@@ -6,3 +6,6 @@ plotly
 requests
 email-validator
 gTTs
+opencv-python
+numpy
+
