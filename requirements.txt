@@ -10,6 +10,6 @@ opencv-python
 numpy
 streamlit-drawable-canvas
 streamlit
-pandas
+
 
 
