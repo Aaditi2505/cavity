@@ -99,8 +99,6 @@ def page_patient_upload():
 
 # ================= Page 3: Result =================
 def page_result():
-    from streamlit_drawable_canvas import st_canvas
-
     st.title("🧪 Diagnosis Result")
     image_path = st.session_state.image_path
     name = st.session_state.patient_name
@@ -117,13 +115,12 @@ def page_result():
     img = Image.open(image_path).convert("RGB")
     draw = ImageDraw.Draw(img)
 
-    # API call to detect cavities
+    # Call the cavity detection API
     with open(image_path, "rb") as f:
         response = requests.post(f"{API_URL}/{MODEL_ID}?api_key={API_KEY}", files={"file": f})
     result = response.json()
 
     cavity_found = False
-    # Draw predictions using PIL
     for pred in result.get("predictions", []):
         if "cavity" in pred["class"].lower():
             cavity_found = True
@@ -133,39 +130,21 @@ def page_result():
         right = x + w / 2
         bottom = y + h / 2
         draw.rectangle([(left, top), (right, bottom)], outline="red", width=3)
-        draw.text((left, top - 10), "Cavity", fill="red")
-
-    # Show editable canvas with detection boxes
-    st.subheader("🖊️ Adjust or Add Bounding Boxes")
-    canvas_result = st_canvas(
-        fill_color="rgba(255, 0, 0, 0.3)",
-        stroke_width=3,
-        stroke_color="red",
-        background_image=img,
-        update_streamlit=True,
-        height=img.height,
-        width=img.width,
-        drawing_mode="rect",
-        key="canvas",
-    )
-
-    if canvas_result.json_data:
-        st.write("✏️ Edited Bounding Boxes (JSON format):")
-        st.json(canvas_result.json_data)
+        draw.text((left, top - 15), "Cavity", fill="red")
 
     st.image(img, caption="AI Prediction Result", use_container_width=True)
 
     diagnosis = "Cavity Detected" if cavity_found else "No Cavity Detected"
     st.success(f"🩺 Diagnosis: {diagnosis}")
 
-    # Update CSV
+    # Update diagnosis CSV
     record_file = os.path.join("patient_records", f"{name}_{timestamp.replace(':', '-').replace(' ', '_')}.csv")
     if os.path.exists(record_file):
         df = pd.read_csv(record_file)
         df.loc[0, 'Diagnosis'] = diagnosis
         df.to_csv(record_file, index=False)
 
-    # Language-specific audio
+    # Generate audio result
     speak_text = {
         "ta": "கறைகள் கண்டறியப்பட்டுள்ளது" if cavity_found else "பல்லில் கறை இல்லை",
         "hi": "दाँत में कैविटी मिली है" if cavity_found else "कोई कैविटी नहीं पाई गई",
@@ -181,7 +160,7 @@ def page_result():
     </audio>
     """, unsafe_allow_html=True)
 
-    # Email section
+    # Optional email
     email_to = st.text_input("📧 Send diagnosis via email (optional):")
     if st.button("Send Email") and email_to:
         try:
