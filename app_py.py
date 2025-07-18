@@ -7,8 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1Dhxjshi6lteLzfRC8Kqzq_glqjGsdFTJ
 """
 
-
-
 # All-in-One Dental Cavity Detection App
 # -----------------------------------------------------
 import streamlit as st
@@ -36,10 +34,7 @@ if "doctor_authenticated" not in st.session_state:
 # ================= Page 1: Login =================
 def page_login():
     st.title("🦷 Welcome to the Dental Cavity Detection System")
-    st.markdown("""
-    <style>
-    .big-font { font-size:200%; font-weight: bold; text-align: center; }
-    </style>""", unsafe_allow_html=True)
+    st.markdown("""<style>.big-font { font-size:200%; font-weight: bold; text-align: center; }</style>""", unsafe_allow_html=True)
     st.markdown("<p class='big-font'>Who are you?</p>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
@@ -57,7 +52,7 @@ def page_doctor_login():
     st.subheader("🔒 Doctor Login")
     password = st.text_input("Enter Password", type="password")
     if st.button("Login"):
-        if password == "admin123":  # Replace with a secure check in production
+        if password == "admin123":
             st.session_state.doctor_authenticated = True
             st.session_state.page = "doctor"
             st.rerun()
@@ -120,35 +115,28 @@ def page_result():
     EMAIL_SENDER = "kamarajengg.edu.in@gmail.com"
     EMAIL_PASSWORD = "vwvcwsfffbrvumzh"
 
-    # Load image
     img_pil = Image.open(image_path).convert("RGB")
     img_cv = np.array(img_pil)
     img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
 
-    # API call to detect cavities
     with open(image_path, "rb") as f:
         response = requests.post(f"{API_URL}/{MODEL_ID}?api_key={API_KEY}", files={"file": f})
     result = response.json()
 
     cavity_found = False
 
-    # Draw boxes using OpenCV
     for pred in result.get("predictions", []):
         if "cavity" in pred["class"].lower():
             cavity_found = True
-
         x, y, w, h = int(pred["x"]), int(pred["y"]), int(pred["width"]), int(pred["height"])
         top_left = (x - w // 2, y - h // 2)
         bottom_right = (x + w // 2, y + h // 2)
         cv2.rectangle(img_cv, top_left, bottom_right, (0, 0, 255), 2)
-        cv2.putText(img_cv, "Cavity", (top_left[0], top_left[1] - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        cv2.putText(img_cv, "Cavity", (top_left[0], top_left[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
-    # Convert image back for canvas background
     img_cv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
     img_canvas = Image.fromarray(img_cv)
 
-    # Show canvas
     st.subheader("🖊️ Adjust or Add Bounding Boxes")
     canvas_result = st_canvas(
         fill_color="rgba(255, 0, 0, 0.3)",
@@ -166,21 +154,17 @@ def page_result():
         st.write("✏️ Edited Bounding Boxes (JSON format):")
         st.json(canvas_result.json_data)
 
-    # Final image display
     st.image(img_canvas, caption="AI Prediction Result", use_container_width=True)
 
-    # Diagnosis text
     diagnosis = "Cavity Detected" if cavity_found else "No Cavity Detected"
     st.success(f"🩺 Diagnosis: {diagnosis}")
 
-    # Update record CSV
     record_file = os.path.join("patient_records", f"{name}_{timestamp.replace(':', '-').replace(' ', '_')}.csv")
     if os.path.exists(record_file):
         df = pd.read_csv(record_file)
         df.loc[0, 'Diagnosis'] = diagnosis
         df.to_csv(record_file, index=False)
 
-    # Audio summary
     speak_text = {
         "ta": "கறைகள் கண்டறியப்பட்டுள்ளது" if cavity_found else "பல்லில் கறை இல்லை",
         "hi": "दाँत में कैविटी मिली है" if cavity_found else "कोई कैविटी नहीं पाई गई",
@@ -196,7 +180,6 @@ def page_result():
     </audio>
     """, unsafe_allow_html=True)
 
-    # Optional email
     email_to = st.text_input("📧 Send diagnosis via email (optional):")
     if st.button("Send Email") and email_to:
         try:
@@ -213,7 +196,6 @@ def page_result():
             st.success("✅ Email sent!")
         except Exception as e:
             st.error(f"Email failed: {e}")
-
 
 # ================= Page 4: Doctor Dashboard =================
 def page_doctor():
@@ -318,5 +300,3 @@ elif st.session_state.page == "doctor":
     else:
         st.session_state.page = "doctor_login"
         st.rerun()
-
-
