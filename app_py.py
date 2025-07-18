@@ -99,8 +99,6 @@ def page_patient_upload():
 
 # ================= Page 3: Result =================
 def page_result():
-    import cv2
-    import numpy as np
     from streamlit_drawable_canvas import st_canvas
 
     st.title("🧪 Diagnosis Result")
@@ -115,37 +113,38 @@ def page_result():
     EMAIL_SENDER = "kamarajengg.edu.in@gmail.com"
     EMAIL_PASSWORD = "vwvcwsfffbrvumzh"
 
-    img_pil = Image.open(image_path).convert("RGB")
-    img_cv = np.array(img_pil)
-    img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
+    # Load image
+    img = Image.open(image_path).convert("RGB")
+    draw = ImageDraw.Draw(img)
 
+    # API call to detect cavities
     with open(image_path, "rb") as f:
         response = requests.post(f"{API_URL}/{MODEL_ID}?api_key={API_KEY}", files={"file": f})
     result = response.json()
 
     cavity_found = False
-
+    # Draw predictions using PIL
     for pred in result.get("predictions", []):
         if "cavity" in pred["class"].lower():
             cavity_found = True
-        x, y, w, h = int(pred["x"]), int(pred["y"]), int(pred["width"]), int(pred["height"])
-        top_left = (x - w // 2, y - h // 2)
-        bottom_right = (x + w // 2, y + h // 2)
-        cv2.rectangle(img_cv, top_left, bottom_right, (0, 0, 255), 2)
-        cv2.putText(img_cv, "Cavity", (top_left[0], top_left[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        x, y, w, h = pred["x"], pred["y"], pred["width"], pred["height"]
+        left = x - w / 2
+        top = y - h / 2
+        right = x + w / 2
+        bottom = y + h / 2
+        draw.rectangle([(left, top), (right, bottom)], outline="red", width=3)
+        draw.text((left, top - 10), "Cavity", fill="red")
 
-    img_cv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-    img_canvas = Image.fromarray(img_cv)
-
+    # Show editable canvas with detection boxes
     st.subheader("🖊️ Adjust or Add Bounding Boxes")
     canvas_result = st_canvas(
         fill_color="rgba(255, 0, 0, 0.3)",
         stroke_width=3,
         stroke_color="red",
-        background_image=img_canvas,
+        background_image=img,
         update_streamlit=True,
-        height=img_canvas.height,
-        width=img_canvas.width,
+        height=img.height,
+        width=img.width,
         drawing_mode="rect",
         key="canvas",
     )
@@ -154,17 +153,19 @@ def page_result():
         st.write("✏️ Edited Bounding Boxes (JSON format):")
         st.json(canvas_result.json_data)
 
-    st.image(img_canvas, caption="AI Prediction Result", use_container_width=True)
+    st.image(img, caption="AI Prediction Result", use_container_width=True)
 
     diagnosis = "Cavity Detected" if cavity_found else "No Cavity Detected"
     st.success(f"🩺 Diagnosis: {diagnosis}")
 
+    # Update CSV
     record_file = os.path.join("patient_records", f"{name}_{timestamp.replace(':', '-').replace(' ', '_')}.csv")
     if os.path.exists(record_file):
         df = pd.read_csv(record_file)
         df.loc[0, 'Diagnosis'] = diagnosis
         df.to_csv(record_file, index=False)
 
+    # Language-specific audio
     speak_text = {
         "ta": "கறைகள் கண்டறியப்பட்டுள்ளது" if cavity_found else "பல்லில் கறை இல்லை",
         "hi": "दाँत में कैविटी मिली है" if cavity_found else "कोई कैविटी नहीं पाई गई",
@@ -180,6 +181,7 @@ def page_result():
     </audio>
     """, unsafe_allow_html=True)
 
+    # Email section
     email_to = st.text_input("📧 Send diagnosis via email (optional):")
     if st.button("Send Email") and email_to:
         try:
