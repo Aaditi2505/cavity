@@ -9,4 +9,10 @@ gTTs
 opencv-python
 numpy
 streamlit-drawable-canvas
+streamlit
+streamlit-drawable-canvas
+pillow
+pandas
+requests
+gtts
 
