@@ -8,4 +8,5 @@ email-validator
 gTTs
 opencv-python
 numpy
+streamlit-drawable-canvas
 
