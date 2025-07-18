@@ -98,6 +98,8 @@ def page_patient_upload():
             st.error(f"❌ Error processing image: {e}")
 
 # ================= Page 3: Result =================
+from streamlit_drawable_canvas import st_canvas
+
 def page_result():
     st.title("🧪 Diagnosis Result")
     image_path = st.session_state.image_path
@@ -113,38 +115,57 @@ def page_result():
 
     # Load image
     img = Image.open(image_path).convert("RGB")
-    draw = ImageDraw.Draw(img)
 
-    # Call the cavity detection API
+    # Step 1: Get prediction from RoboFlow
     with open(image_path, "rb") as f:
         response = requests.post(f"{API_URL}/{MODEL_ID}?api_key={API_KEY}", files={"file": f})
     result = response.json()
 
+    # Step 2: Extract predictions as initial box shapes
     cavity_found = False
+    shapes = []
     for pred in result.get("predictions", []):
         if "cavity" in pred["class"].lower():
             cavity_found = True
         x, y, w, h = pred["x"], pred["y"], pred["width"], pred["height"]
         left = x - w / 2
         top = y - h / 2
-        right = x + w / 2
-        bottom = y + h / 2
-        draw.rectangle([(left, top), (right, bottom)], outline="red", width=3)
-        draw.text((left, top - 15), "Cavity", fill="red")
+        shapes.append({
+            "type": "rect",
+            "left": left,
+            "top": top,
+            "width": w,
+            "height": h,
+            "fill": "rgba(255, 0, 0, 0.3)",
+            "stroke": "red",
+            "name": "Cavity"
+        })
 
-    st.image(img, caption="AI Prediction Result", use_container_width=True)
+    # Step 3: Show editable canvas
+    st.subheader("🛠️ Adjust or Duplicate Cavity Boxes Below")
+    canvas_result = st_canvas(
+        fill_color="rgba(255, 0, 0, 0.3)",
+        stroke_color="red",
+        stroke_width=3,
+        background_image=img,
+        update_streamlit=True,
+        height=img.height,
+        width=img.width,
+        drawing_mode="rect",
+        initial_drawing=shapes,
+        key="editable_canvas"
+    )
 
+    # Step 4: Show editable box data
+    if canvas_result.json_data:
+        st.write("📦 Updated Boxes:")
+        st.json(canvas_result.json_data)
+
+    # Step 5: Display summary
     diagnosis = "Cavity Detected" if cavity_found else "No Cavity Detected"
-    st.success(f"🩺 Diagnosis: {diagnosis}")
+    st.success(f"🩺 Initial AI Diagnosis: {diagnosis}")
 
-    # Update diagnosis CSV
-    record_file = os.path.join("patient_records", f"{name}_{timestamp.replace(':', '-').replace(' ', '_')}.csv")
-    if os.path.exists(record_file):
-        df = pd.read_csv(record_file)
-        df.loc[0, 'Diagnosis'] = diagnosis
-        df.to_csv(record_file, index=False)
-
-    # Generate audio result
+    # Step 6: Generate audio message
     speak_text = {
         "ta": "கறைகள் கண்டறியப்பட்டுள்ளது" if cavity_found else "பல்லில் கறை இல்லை",
         "hi": "दाँत में कैविटी मिली है" if cavity_found else "कोई कैविटी नहीं पाई गई",
@@ -160,7 +181,7 @@ def page_result():
     </audio>
     """, unsafe_allow_html=True)
 
-    # Optional email
+    # Step 7: Optional email
     email_to = st.text_input("📧 Send diagnosis via email (optional):")
     if st.button("Send Email") and email_to:
         try:
@@ -178,93 +199,6 @@ def page_result():
         except Exception as e:
             st.error(f"Email failed: {e}")
 
-# ================= Page 4: Doctor Dashboard =================
-def page_doctor():
-    st.title("🦷 Doctor Dashboard – Cavity Detection Reports")
-    if st.button("🔒 Logout"):
-        st.session_state.page = "login"
-        st.session_state.rerun = True
-
-    record_dir = "patient_records"
-    image_dir = "patient_images"
-    if not os.path.exists(record_dir):
-        st.warning("No patient record directory found.")
-        return
-
-    patient_files = [f for f in os.listdir(record_dir) if f.endswith(".csv")]
-    if not patient_files:
-        st.info("No patient records yet.")
-        return
-
-    all_records = []
-    for file in patient_files:
-        try:
-            df = pd.read_csv(os.path.join(record_dir, file))
-            df["source_file"] = file
-            all_records.append(df)
-        except Exception as e:
-            st.error(f"Error reading {file}: {e}")
-
-    records_df = pd.concat(all_records, ignore_index=True)
-
-    with st.sidebar:
-        st.subheader("🔍 Filter Options")
-        name_filter = st.text_input("Search by Name")
-        date_filter = st.date_input("Filter by Date", value=None)
-
-    if name_filter:
-        records_df = records_df[records_df['Name'].str.contains(name_filter, case=False)]
-    if date_filter:
-        date_str = date_filter.strftime("%Y-%m-%d")
-        records_df = records_df[records_df['Datetime'].str.startswith(date_str)]
-
-    st.success(f"{len(records_df)} patient record(s) found")
-    st.dataframe(records_df, use_container_width=True)
-
-    csv = records_df.to_csv(index=False).encode('utf-8')
-    st.download_button("Download Filtered Records", csv, "filtered_records.csv", "text/csv")
-
-    if os.path.exists(image_dir):
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-            for f in os.listdir(image_dir):
-                zip_file.write(os.path.join(image_dir, f), arcname=f)
-        st.download_button("📦 Download All Patient Images", zip_buffer.getvalue(), "all_patient_images.zip", "application/zip")
-
-    st.subheader("📈 Diagnosis Summary")
-    st.metric("Total Patients", len(records_df))
-    st.metric("Cavity Cases", (records_df['Diagnosis'] == 'Cavity Detected').sum())
-
-    for i, row in records_df.iterrows():
-        name = row['Name']
-        diagnosis = row['Diagnosis']
-        datetime_str = row['Datetime']
-        filename_base = f"{name}_{datetime_str.replace(':', '-').replace(' ', '_')}"
-        image_path = os.path.join(image_dir, f"{filename_base}.jpg")
-
-        st.markdown(f"### 🧑‍⚕️ {name} – {datetime_str}")
-        st.write(f"**Diagnosis**: {diagnosis}")
-
-        if os.path.exists(image_path):
-            st.image(image_path, caption=f"Uploaded by {name}", use_container_width=True)
-            email_to = st.text_input(f"Send diagnosis for {name} to email:", key=f"email_{i}")
-            if st.button(f"Send Email to {name}", key=f"btn_{i}"):
-                try:
-                    msg = EmailMessage()
-                    msg['Subject'] = 'Dental Cavity Diagnosis Report'
-                    msg['From'] = EMAIL_SENDER
-                    msg['To'] = email_to
-                    msg.set_content(f"Patient Name: {name}\nDiagnosis: {diagnosis}\nDate: {datetime_str}")
-                    with open(image_path, 'rb') as img_file:
-                        msg.add_attachment(img_file.read(), maintype='image', subtype='jpeg', filename=os.path.basename(image_path))
-                    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-                        smtp.login(EMAIL_SENDER, EMAIL_PASSWORD)
-                        smtp.send_message(msg)
-                    st.success("✅ Email sent successfully")
-                except Exception as e:
-                    st.error(f"❌ Failed to send email: {e}")
-        else:
-            st.warning("No image found for this patient.")
 
 # ================= Main Dispatcher =================
 if st.session_state.page == "login":
