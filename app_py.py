@@ -22,6 +22,9 @@ import requests
 from gtts import gTTS
 import io
 import zipfile
+import sys
+import streamlit as st
+st.sidebar.info(f"✅ Running on Python {sys.version}")
 
 # ================= Page Setup =================
 st.set_page_config(page_title="Dental Cavity App", layout="centered")
